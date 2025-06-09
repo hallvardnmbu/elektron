@@ -108,21 +108,29 @@ async fn index() -> Html<&'static str> {
             color: black;
             padding: 20px;
             line-height: 1.4;
+
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
-        #date {
+        #header {
             margin-bottom: 10px;
             font-weight: bold;
         }
-
-        #data {
+        #statistics {
             white-space: pre;
             margin-top: 20px;
         }
 
-        #graph {
-            margin-top: 30px;
+        #graphContainer, #priceGraph {
             width: 100%;
+        }
+        #graphContainer {
+            margin-top: 30px;
+        }
+        #priceGraph {
+            height: 400px;
         }
 
         .error {
@@ -131,36 +139,179 @@ async fn index() -> Html<&'static str> {
             margin: 10px 0;
         }
 
-        #tooltip {
-            position: absolute;
-            background: black;
-            color: white;
-            padding: 5px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 12px;
-            display: none;
-            pointer-events: none;
-            z-index: 1000;
         }
     </style>
 </head>
 <body>
-    <div id="date"></div>
+    <div id="header"></div>
+
+    <div id="graphContainer">
+        <canvas id="priceGraph"></canvas>
+    </div>
 
     <div id="error" class="error" style="display: none;"></div>
-    <div id="data"></div>
-    <div id="graph"></div>
-    <div id="tooltip"></div>
+    <div id="statistics"></div>
 
     <script>
         let chartData = null;
 
+        // dataObject is expected to be the full chartData array here.
+        // Always use today's date for filtering
+        function graphPrice(dataObject) {
+            const canvas = document.getElementById('priceGraph');
+            const ctx = canvas.getContext('2d');
+
+            const parent = canvas.parentElement;
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = parent.clientWidth * dpr;
+            canvas.height = parent.clientHeight * dpr;
+            ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform before scaling
+            ctx.scale(dpr, dpr);
+
+            // Always use today's date (local time)
+            const now = new Date();
+            const offset = now.getTimezoneOffset();
+            const adjustedDate = new Date(now.getTime() - offset * 60 * 1000);
+            const todayString = adjustedDate.toISOString().split('T')[0];
+
+            // Filter the data for today and prepare price and hour arrays
+            let dailyData = dataObject.filter(item => item.time.startsWith(todayString));
+            if (dailyData.length === 0) {
+                ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+                ctx.font = '16px JetBrains Mono';
+                ctx.fillStyle = 'black';
+                ctx.textAlign = 'center';
+                ctx.fillText('No data available for this date.', canvas.width / dpr / 2, canvas.height / dpr / 2);
+                return;
+            }
+
+            // Step graph: add a final point at last hour + 1 with the same value and correct hour label
+            let stepData = dailyData.map(item => ({ hour: item.hour, price: item.price }));
+            const last = stepData[stepData.length - 1];
+            // Add a new hour label for the last value
+            stepData.push({ hour: last.hour + 1, price: last.price });
+
+            const prices = stepData.map(item => item.price);
+            const hours = stepData.map(item => item.hour);
+
+            const margin = { top: 20, right: 20, bottom: 30, left: 50 };
+            const graphWidth = canvas.width / dpr - margin.left - margin.right;
+            const graphHeight = canvas.height / dpr - margin.top - margin.bottom;
+
+            const maxPrice = Math.max(...prices);
+            const minPrice = Math.min(...prices);
+
+            ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+            ctx.font = '12px JetBrains Mono';
+            ctx.fillStyle = 'black';
+
+            // Draw Y-axis labels only (no grid or axis lines)
+            const yAxisTicks = 5;
+            for (let i = 0; i <= yAxisTicks; i++) {
+                const value = minPrice + (maxPrice - minPrice) * i / yAxisTicks;
+                const y = margin.top + graphHeight - (graphHeight * i / yAxisTicks);
+                ctx.fillText(value.toFixed(2), margin.left - 40, y + 4);
+            }
+
+            // Draw X-axis labels only (no grid or axis lines)
+            const xTickDenominator = stepData.length - 1 > 0 ? stepData.length - 1 : 1;
+            for (let i = 0; i < stepData.length; i++) {
+                const x = margin.left + (graphWidth / xTickDenominator) * i;
+                ctx.fillText(hours[i].toString().padStart(2, '0'), x - 6, margin.top + graphHeight + 20);
+            }
+
+            // Draw step price line
+            ctx.beginPath();
+            for (let i = 0; i < stepData.length - 1; i++) {
+                const x1 = margin.left + (graphWidth / xTickDenominator) * i;
+                const x2 = margin.left + (graphWidth / xTickDenominator) * (i + 1);
+                const y = margin.top + graphHeight - ((stepData[i].price - minPrice) / (maxPrice - minPrice)) * graphHeight;
+                if (i === 0) {
+                    ctx.moveTo(x1, y);
+                } else {
+                    ctx.lineTo(x1, y);
+                }
+                ctx.lineTo(x2, y); // horizontal step
+            }
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // --- Hover Functionality ---
+            const hoverLayerId = `priceGraph-hover`;
+            let existingHoverLayer = document.getElementById(hoverLayerId);
+            if (existingHoverLayer) {
+                existingHoverLayer.remove();
+            }
+
+            let hoverLayer = document.createElement('canvas');
+            hoverLayer.id = hoverLayerId;
+            hoverLayer.style.position = "absolute";
+            // Position hoverLayer exactly over the canvas
+            hoverLayer.style.left = canvas.offsetLeft + "px";
+            hoverLayer.style.top = canvas.offsetTop + "px";
+            hoverLayer.width = canvas.width;
+            hoverLayer.height = canvas.height;
+            hoverLayer.style.width = canvas.width / dpr + "px";
+            hoverLayer.style.height = canvas.height / dpr + "px";
+            hoverLayer.style.pointerEvents = "none";
+            canvas.parentElement.appendChild(hoverLayer);
+            let hoverCtx = hoverLayer.getContext("2d");
+            hoverCtx.setTransform(1, 0, 0, 1, 0, 0);
+            hoverCtx.scale(dpr, dpr);
+
+            canvas.onmousemove = function(event) {
+                if (stepData.length < 2) return;
+                const rect = canvas.getBoundingClientRect();
+                const x = (event.clientX - rect.left) * (canvas.width / dpr / rect.width);
+                // Find which step (hour) the mouse is over
+                const xScale = graphWidth / xTickDenominator;
+                let hoverIndex = Math.floor((x - margin.left) / xScale);
+                if (hoverIndex < 0) hoverIndex = 0;
+                if (hoverIndex >= stepData.length - 1) hoverIndex = stepData.length - 2;
+                const price = stepData[hoverIndex].price;
+                const hour = hours[hoverIndex];
+                const xStep = margin.left + xScale * hoverIndex;
+                const yStep = margin.top + graphHeight - ((price - minPrice) / (maxPrice - minPrice)) * graphHeight;
+
+                hoverCtx.clearRect(0, 0, hoverLayer.width / dpr, hoverLayer.height / dpr);
+                hoverCtx.font = `12px 'JetBrains Mono'`;
+                hoverCtx.fillStyle = "black";
+                hoverCtx.textAlign = "left";
+
+                // Tooltip position: above the step
+                let textX = xStep + 5;
+                let textY = yStep - 10;
+                const text = `${price.toFixed(1)}`;
+                const textMetrics = hoverCtx.measureText(text);
+                if (textX + textMetrics.width > canvas.width / dpr) {
+                    textX = xStep - textMetrics.width - 10;
+                }
+                if (textY - 12 < 0) {
+                    textY = yStep + 20;
+                }
+                hoverCtx.fillText(text, textX, textY);
+
+                // Draw vertical line at the left edge of the step
+                hoverCtx.beginPath();
+                hoverCtx.moveTo(xStep, margin.top);
+                hoverCtx.lineTo(xStep, margin.top + graphHeight);
+                hoverCtx.strokeStyle = 'black';
+                hoverCtx.lineWidth = 2;
+                hoverCtx.stroke();
+            };
+
+            canvas.onmouseleave = function() {
+                hoverCtx.clearRect(0, 0, hoverLayer.width / dpr, hoverLayer.height / dpr);
+            };
+        }
+
         async function loadData() {
             const error = document.getElementById('error');
-            const data = document.getElementById('data');
+            const statistics = document.getElementById('statistics');
 
             error.style.display = 'none';
-            data.innerHTML = '';
+            statistics.innerHTML = '';
 
             try {
                 const response = await fetch('/prices');
@@ -176,8 +327,8 @@ async fn index() -> Html<&'static str> {
 
                 displayData(priceData);
 
-                chartData = priceData;
-                createGraph(priceData);
+                chartData = priceData; // chartData is the full data from /prices
+                graphPrice(chartData); // Always use today's data
 
             } catch (err) {
                 error.textContent = err.message;
@@ -196,111 +347,11 @@ async fn index() -> Html<&'static str> {
             const dateStr = now.getDate().toString().padStart(2, '0') + '-' +
                            (now.getMonth() + 1).toString().padStart(2, '0') + '-' +
                            now.getFullYear();
-            document.getElementById('date').textContent = dateStr;
+            const header = `Priser den ${dateStr} for NO2 i øre / kWh`;
+            document.getElementById('header').textContent = header;
 
-            let output = '';
-
-            // Prices
-            priceData.forEach(item => {
-                const price = item.price.toFixed(1).padStart(5, ' ');
-                output += price + '\t';
-            });
-            output += '\n';
-
-            // Hours
-            priceData.forEach(item => {
-                const date = new Date(item.time);
-                const hour = date.getHours().toString().padStart(2, '0').padStart(5, ' ');
-                output += hour + '\t';
-            });
-            output += '\n\n';
-
-            // Statistics
-            output += 'Maksverdi    ' + maxPrice.toFixed(1).padStart(5, ' ') + '\n';
-            output += 'Gjennomsnitt ' + avgPrice.toFixed(1).padStart(5, ' ') + '\n';
-            output += 'Minsteverdi  ' + minPrice.toFixed(1).padStart(5, ' ');
-
-            document.getElementById('data').textContent = output;
-        }
-
-        function createGraph(priceData) {
-            const container = document.getElementById('graph');
-            const width = container.offsetWidth || 800;
-            const height = 200;
-            const margin = { top: 20, right: 20, bottom: 20, left: 60 };
-            const graphWidth = width - margin.left - margin.right;
-            const graphHeight = height - margin.top - margin.bottom;
-
-            const prices = priceData.map(d => d.price);
-            const minPrice = Math.min(...prices);
-            const maxPrice = Math.max(...prices);
-
-            const elements = prices.length;
-            console.log(elements);
-
-            let svg = '<svg width="' + width + '" height="' + height + '" style="background: white;">';
-
-            // Y-axis tick marks and labels
-            for (let i = 0; i <= 4; i++) {
-                const value = minPrice + (maxPrice - minPrice) * i / 4;
-                const y = height - margin.bottom - (graphHeight * i / 4);
-                svg += '<text x="' + (margin.left - 10) + '" y="' + (y + 4) + '" text-anchor="end" font-size="10" fill="black">' + value.toFixed(1) + '</text>';
-            }
-
-            // X-axis tick marks and labels
-            for (let i = 0; i < elements; i += 1) {
-                const x = margin.left + (graphWidth * i / (elements - 1));
-                svg += '<text x="' + x + '" y="' + (height - 5) + '" text-anchor="middle" font-size="10" fill="black">' + i.toString().padStart(2, '0') + '</text>';
-            }
-
-            // Step line path
-            let pathData = '';
-            priceData.forEach((item, index) => {
-                const x = margin.left + (graphWidth * item.hour / 23);
-                const y = height - margin.bottom - ((item.price - minPrice) / (maxPrice - minPrice)) * graphHeight;
-
-                if (index === 0) {
-                    pathData += 'M' + x + ',' + y;
-                } else {
-                    const prevItem = priceData[index - 1];
-                    const prevX = margin.left + (graphWidth * prevItem.hour / 23);
-                    pathData += 'L' + prevX + ',' + y + 'L' + x + ',' + y;
-                }
-            });
-
-            svg += '<path d="' + pathData + '" stroke="black" stroke-width="1" fill="none"/>';
-
-            // Invisible hover rectangles
-            priceData.forEach((item, index) => {
-                const x = margin.left + (graphWidth * item.hour / 23);
-                const rectWidth = graphWidth / 23;
-                const rectX = x - (rectWidth / 2);
-
-                svg += '<rect x="' + rectX + '" y="' + margin.top + '" width="' + rectWidth + '" height="' + graphHeight + '" fill="transparent" ';
-                svg += 'onmouseover="showTooltip(event, ' + item.hour + ', ' + item.price + ')" ';
-                svg += 'onmousemove="moveTooltip(event)" ';
-                svg += 'onmouseout="hideTooltip()"/>';
-            });
-
-            svg += '</svg>';
-            document.getElementById('graph').innerHTML = svg;
-        }
-
-        function showTooltip(event, hour, price) {
-            const tooltip = document.getElementById('tooltip');
-            tooltip.style.display = 'block';
-            tooltip.textContent = hour.toString().padStart(2, '0') + ':00 ' + price.toFixed(1) + ' øre/kWh';
-            moveTooltip(event);
-        }
-
-        function moveTooltip(event) {
-            const tooltip = document.getElementById('tooltip');
-            tooltip.style.left = (event.pageX + 10) + 'px';
-            tooltip.style.top = (event.pageY - 30) + 'px';
-        }
-
-        function hideTooltip() {
-            document.getElementById('tooltip').style.display = 'none';
+            const statistics = `Maks ${maxPrice.toFixed(1)} • Gjn. ${avgPrice.toFixed(1)} • Min. ${minPrice.toFixed(1)}`;
+            document.getElementById('statistics').textContent = statistics;
         }
 
         document.addEventListener('DOMContentLoaded', function() {
@@ -310,7 +361,7 @@ async fn index() -> Html<&'static str> {
         window.addEventListener('resize', function() {
             // Only redraw if we have cached data
             if (chartData) {
-                createGraph(chartData);
+                graphPrice(chartData); // Always use today's data
             }
         });
     </script>
