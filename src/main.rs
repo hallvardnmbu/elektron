@@ -72,13 +72,10 @@ async fn serve_font(axum::extract::Path(filename): axum::extract::Path<String>) 
     }
 }
 
-async fn fetch() -> Result<Vec<PriceData>, Box<dyn std::error::Error>> {
-    let now = Local::now();
+async fn fetch_for_date(year: i32, month: u32, day: u32, region: &str) -> Result<Vec<PriceData>, Box<dyn std::error::Error>> {
     let url = format!(
-        "https://www.hvakosterstrommen.no/api/v1/prices/{}/{:02}-{:02}_NO2.json",
-        now.year(),
-        now.month(),
-        now.day()
+        "https://www.hvakosterstrommen.no/api/v1/prices/{}/{:02}-{:02}_{}.json",
+        year, month, day, region
     );
 
     let client = reqwest::Client::new();
@@ -90,6 +87,11 @@ async fn fetch() -> Result<Vec<PriceData>, Box<dyn std::error::Error>> {
 
     let data: Vec<PriceData> = response.json().await?;
     Ok(data)
+}
+
+async fn fetch() -> Result<Vec<PriceData>, Box<dyn std::error::Error>> {
+    let now = Local::now();
+    fetch_for_date(now.year(), now.month(), now.day(), "NO2").await
 }
 
 async fn prices() -> impl IntoResponse {
@@ -108,6 +110,50 @@ async fn prices() -> impl IntoResponse {
                         hour,
                         price: item.nok_kwh * 100.0,
 
+                        time: item.time_start,
+                        price_nok: item.nok_kwh,
+                        price_eur: item.eur_kwh,
+                    }
+                })
+                .collect();
+
+            Json(chart).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Error: {}", e)).into_response(),
+    }
+}
+
+async fn prices_for_date(axum::extract::Path((year, month, day, region)): axum::extract::Path<(i32, u32, u32, String)>) -> impl IntoResponse {
+    // Validate date range
+    if year < 2020 || year > 2030 {
+        return (StatusCode::BAD_REQUEST, "Year must be between 2020 and 2030".to_string()).into_response();
+    }
+    if month < 1 || month > 12 {
+        return (StatusCode::BAD_REQUEST, "Month must be between 1 and 12".to_string()).into_response();
+    }
+    if day < 1 || day > 31 {
+        return (StatusCode::BAD_REQUEST, "Day must be between 1 and 31".to_string()).into_response();
+    }
+    
+    // Validate region
+    if !["NO1", "NO2", "NO3", "NO4", "NO5"].contains(&region.as_str()) {
+        return (StatusCode::BAD_REQUEST, "Region must be NO1-NO5".to_string()).into_response();
+    }
+
+    match fetch_for_date(year, month, day, &region).await {
+        Ok(data) => {
+            let chart: Vec<ChartDataPoint> = data
+                .into_iter()
+                .map(|item| {
+                    let hour = if let Ok(dt) = DateTime::parse_from_rfc3339(&item.time_start) {
+                        dt.hour()
+                    } else {
+                        0
+                    };
+
+                    ChartDataPoint {
+                        hour,
+                        price: item.nok_kwh * 100.0,
                         time: item.time_start,
                         price_nok: item.nok_kwh,
                         price_eur: item.eur_kwh,
@@ -187,6 +233,140 @@ async fn index() -> Html<&'static str> {
             padding-bottom: 10px;
             width: 100%;
             max-width: 800px;
+        }
+
+        #dateNavigation {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin: 15px 0;
+            padding: 10px;
+            border: 2px solid #000000;
+            background: #ffffff;
+            font-weight: 700;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .nav-button {
+            background: #ffffff;
+            border: 2px solid #000000;
+            color: #000000;
+            padding: 5px 10px;
+            font-family: 'JetBrainsMono', monospace;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 0 !important;
+        }
+
+        .nav-button:hover {
+            background: #000000;
+            color: #ffffff;
+        }
+
+        .nav-button:disabled {
+            background: #ffffff;
+            color: #cccccc;
+            border-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .nav-button:disabled:hover {
+            background: #ffffff;
+            color: #cccccc;
+        }
+
+        #currentDate {
+            font-weight: 700;
+            letter-spacing: 1px;
+            min-width: 120px;
+            text-align: center;
+        }
+
+        #thresholdControls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin: 15px 0;
+            padding: 10px;
+            border: 2px solid #000000;
+            background: #ffffff;
+            font-weight: 700;
+            max-width: 800px;
+            width: 100%;
+            flex-wrap: wrap;
+        }
+
+        .threshold-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-family: 'JetBrainsMono', monospace;
+            font-weight: 700;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .threshold-checkbox input[type="checkbox"] {
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #000000;
+            background: #ffffff;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .threshold-checkbox input[type="checkbox"]:checked {
+            background: #000000;
+        }
+
+        .threshold-checkbox input[type="checkbox"]:checked::after {
+            content: '✓';
+            position: absolute;
+            top: -2px;
+            left: 2px;
+            color: #ffffff;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .threshold-zero { color: #cc0000; }
+        .threshold-fifty { color: #ff6600; }
+        .threshold-ninety { color: #cc0000; }
+
+        #regionSelector {
+            display: inline-block;
+            margin-left: 10px;
+        }
+
+        .region-dropdown {
+            background: #ffffff;
+            border: 2px solid #000000;
+            color: #000000;
+            padding: 2px 6px;
+            font-family: 'JetBrainsMono', monospace;
+            font-weight: 700;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 0 !important;
+            appearance: none;
+        }
+
+        .region-dropdown:focus {
+            outline: none;
+            background: #000000;
+            color: #ffffff;
+        }
+
+        .region-dropdown option {
+            background: #ffffff;
+            color: #000000;
+            font-family: 'JetBrainsMono', monospace;
+            font-weight: 700;
         }
 
         #graphContainer {
@@ -272,7 +452,40 @@ async fn index() -> Html<&'static str> {
     </style>
 </head>
 <body>
-    <div id="header">ELEKTRON</div>
+    <div id="header">
+        ELEKTRON
+        <span id="regionSelector">
+            <select class="region-dropdown" id="regionDropdown">
+                <option value="NO1">NO1</option>
+                <option value="NO2" selected>NO2</option>
+                <option value="NO3">NO3</option>
+                <option value="NO4">NO4</option>
+                <option value="NO5">NO5</option>
+            </select>
+        </span>
+    </div>
+    
+    <div id="dateNavigation" style="display: none;">
+        <button class="nav-button" id="prevButton">◀ PREV</button>
+        <div id="currentDate"></div>
+        <button class="nav-button" id="nextButton">NEXT ▶</button>
+    </div>
+    
+    <div id="thresholdControls" style="display: none;">
+        <label class="threshold-checkbox threshold-zero">
+            <input type="checkbox" id="threshold0" />
+            <span>0 øre</span>
+        </label>
+        <label class="threshold-checkbox threshold-fifty">
+            <input type="checkbox" id="threshold50" />
+            <span>50 øre</span>
+        </label>
+        <label class="threshold-checkbox threshold-ninety">
+            <input type="checkbox" id="threshold75" />
+            <span>75 øre</span>
+        </label>
+    </div>
+    
     <div class="loading" id="loading">LOADING DATA...</div>
 
     <div id="graphContainer" style="display: none;">
@@ -284,10 +497,16 @@ async fn index() -> Html<&'static str> {
 
     <script>
         let chartData = null;
+        let currentDate = new Date();
+        let currentRegion = 'NO2';
+        let thresholdStates = {
+            zero: true,
+            fifty: false,
+            seventyFive: true
+        };
 
         // dataObject is expected to be the full chartData array here.
-        // Always use today's date for filtering
-        function graphPrice(dataObject) {
+        function graphPrice(dataObject, targetDate = null) {
             const canvas = document.getElementById('priceGraph');
             const ctx = canvas.getContext('2d');
 
@@ -298,20 +517,24 @@ async fn index() -> Html<&'static str> {
             ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform before scaling
             ctx.scale(dpr, dpr);
 
-            // Always use today's date (local time)
-            const now = new Date();
-            const offset = now.getTimezoneOffset();
-            const adjustedDate = new Date(now.getTime() - offset * 60 * 1000);
-            const todayString = adjustedDate.toISOString().split('T')[0];
+            // Use the target date or fall back to today
+            const dateToUse = targetDate || new Date();
+            const offset = dateToUse.getTimezoneOffset();
+            const adjustedDate = new Date(dateToUse.getTime() - offset * 60 * 1000);
+            const dateString = adjustedDate.toISOString().split('T')[0];
 
-            // Filter the data for today and prepare price and hour arrays
-            let dailyData = dataObject.filter(item => item.time.startsWith(todayString));
+            // Filter the data for the specified date and prepare price and hour arrays
+            let dailyData = dataObject.filter(item => item.time.startsWith(dateString));
             if (dailyData.length === 0) {
                 ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-                ctx.font = '14px JetBrainsMono';
+                ctx.font = '14px JetBrainsMono, "JetBrains Mono", monospace';
                 ctx.fillStyle = '#000000';
                 ctx.textAlign = 'center';
                 ctx.fillText('NO DATA AVAILABLE FOR THIS DATE', canvas.width / dpr / 2, canvas.height / dpr / 2);
+                
+                // Remove any existing hover functionality for no data case
+                canvas.onmousemove = null;
+                canvas.onmouseleave = null;
                 return;
             }
 
@@ -332,10 +555,10 @@ async fn index() -> Html<&'static str> {
             const minPrice = Math.min(...prices);
             const priceRange = maxPrice - minPrice;
             const paddedMax = maxPrice + (priceRange * 0.1);
-            const paddedMin = Math.max(0, minPrice - (priceRange * 0.1));
+            const paddedMin = minPrice - (priceRange * 0.1);
 
             ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-            ctx.font = '12px JetBrainsMono';
+            ctx.font = '12px JetBrainsMono, "JetBrains Mono", monospace';
             ctx.fillStyle = '#000000';
             ctx.textAlign = 'right';
             ctx.textBaseline = 'middle';
@@ -379,22 +602,31 @@ async fn index() -> Html<&'static str> {
                 }
             }
 
-            // Draw step price line
-            ctx.beginPath();
+            // Draw step price line with different colors for day/night hours
             for (let i = 0; i < stepData.length - 1; i++) {
                 const x1 = margin.left + (graphWidth / xTickDenominator) * i;
                 const x2 = margin.left + (graphWidth / xTickDenominator) * (i + 1);
-                const y = margin.top + graphHeight - ((stepData[i].price - paddedMin) / (paddedMax - paddedMin)) * graphHeight;
-                if (i === 0) {
-                    ctx.moveTo(x1, y);
-                } else {
-                    ctx.lineTo(x1, y);
-                }
-                ctx.lineTo(x2, y); // horizontal step
+                const y1 = margin.top + graphHeight - ((stepData[i].price - paddedMin) / (paddedMax - paddedMin)) * graphHeight;
+                const y2 = margin.top + graphHeight - ((stepData[i + 1].price - paddedMin) / (paddedMax - paddedMin)) * graphHeight;
+                
+                // Determine color based on hour (gray for before 07:00 and after 22:00)
+                const hour = stepData[i].hour;
+                const isNightTime = hour < 7 || hour > 22;
+                const lineColor = isNightTime ? '#888888' : '#000000';
+                
+                ctx.beginPath();
+                // Draw horizontal line for current step
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y1);
+                // Draw vertical line to next step level
+                ctx.lineTo(x2, y2);
+                ctx.strokeStyle = lineColor;
+                ctx.lineWidth = 3;
+                ctx.stroke();
             }
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 3;
-            ctx.stroke();
+
+            // Draw threshold lines
+            drawThresholdLines(ctx, margin, graphWidth, graphHeight, paddedMin, paddedMax);
 
             // --- Hover Functionality ---
             const hoverLayerId = `priceGraph-hover`;
@@ -432,7 +664,7 @@ async fn index() -> Html<&'static str> {
                 const yStep = margin.top + graphHeight - ((price - paddedMin) / (paddedMax - paddedMin)) * graphHeight;
 
                 hoverCtx.clearRect(0, 0, hoverLayer.width / dpr, hoverLayer.height / dpr);
-                hoverCtx.font = '12px JetBrainsMono';
+                hoverCtx.font = '12px JetBrainsMono, "JetBrains Mono", monospace';
                 hoverCtx.fillStyle = '#000000';
                 hoverCtx.textAlign = 'left';
 
@@ -480,11 +712,58 @@ async fn index() -> Html<&'static str> {
             };
         }
 
-        async function loadData() {
+        function drawThresholdLines(ctx, margin, graphWidth, graphHeight, paddedMin, paddedMax) {
+            const thresholds = [
+                { value: 0, color: '#cc0000', enabled: thresholdStates.zero },
+                { value: 50, color: '#ff6600', enabled: thresholdStates.fifty },
+                { value: 75, color: '#cc0000', enabled: thresholdStates.seventyFive }
+            ];
+
+            thresholds.forEach(threshold => {
+                if (threshold.enabled && threshold.value >= paddedMin && threshold.value <= paddedMax) {
+                    const y = margin.top + graphHeight - ((threshold.value - paddedMin) / (paddedMax - paddedMin)) * graphHeight;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(margin.left, y);
+                    ctx.lineTo(margin.left + graphWidth, y);
+                    ctx.strokeStyle = threshold.color;
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([5, 5]);
+                    ctx.stroke();
+                    ctx.setLineDash([]); // Reset dash pattern
+                    
+                    // Add threshold label
+                    ctx.font = '11px JetBrainsMono, "JetBrains Mono", monospace';
+                    ctx.fillStyle = threshold.color;
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(`${threshold.value} øre`, margin.left + 5, y - 10);
+                }
+            });
+        }
+
+        function updateThresholdStates() {
+            thresholdStates.zero = document.getElementById('threshold0').checked;
+            thresholdStates.fifty = document.getElementById('threshold50').checked;
+            thresholdStates.seventyFive = document.getElementById('threshold75').checked;
+            
+            if (chartData) {
+                graphPrice(chartData, currentDate);
+            }
+        }
+
+        function updateRegion() {
+            currentRegion = document.getElementById('regionDropdown').value;
+            loadData(currentDate);
+        }
+
+        async function loadData(date = null) {
             const error = document.getElementById('error');
             const statistics = document.getElementById('statistics');
             const loading = document.getElementById('loading');
             const graphContainer = document.getElementById('graphContainer');
+            const dateNavigation = document.getElementById('dateNavigation');
+            const thresholdControls = document.getElementById('thresholdControls');
 
             error.style.display = 'none';
             statistics.style.display = 'none';
@@ -492,7 +771,13 @@ async fn index() -> Html<&'static str> {
             graphContainer.style.display = 'none';
 
             try {
-                const response = await fetch('/prices');
+                let url = '/prices';
+                if (date) {
+                    url = `/prices/${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}/${currentRegion}`;
+                    console.log('Fetching URL:', url);
+                }
+
+                const response = await fetch(url);
                 if (!response.ok) {
                     throw new Error('HTTP ERROR ' + response.status);
                 }
@@ -504,12 +789,14 @@ async fn index() -> Html<&'static str> {
                 }
 
                 loading.style.display = 'none';
-                displayData(priceData);
+                displayData(priceData, date);
                 graphContainer.style.display = 'block';
                 statistics.style.display = 'block';
+                dateNavigation.style.display = 'flex';
+                thresholdControls.style.display = 'flex';
 
                 chartData = priceData;
-                setTimeout(() => graphPrice(chartData), 100); // Allow DOM to update
+                setTimeout(() => graphPrice(chartData, date), 100); // Allow DOM to update
 
             } catch (err) {
                 loading.style.display = 'none';
@@ -518,30 +805,86 @@ async fn index() -> Html<&'static str> {
             }
         }
 
-        function displayData(priceData) {
+        function displayData(priceData, date = null) {
             const prices = priceData.map(item => item.price);
             const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
             const maxPrice = Math.max(...prices);
             const minPrice = Math.min(...prices);
 
-            const now = new Date();
-            const dateStr = now.getDate().toString().padStart(2, '0') + '-' +
-                           (now.getMonth() + 1).toString().padStart(2, '0') + '-' +
-                           now.getFullYear();
-            const header = `ELECTRICITY PRICES ${dateStr} (NO2) - øre/kWh`;
-            document.getElementById('header').textContent = header;
+            const displayDate = date || new Date();
+            const dateStr = displayDate.getDate().toString().padStart(2, '0') + '-' +
+                           (displayDate.getMonth() + 1).toString().padStart(2, '0') + '-' +
+                           displayDate.getFullYear();
+            const headerTitle = `ELECTRICITY PRICES ${dateStr} (øre/kWh)`;
+            document.getElementById('header').childNodes[0].textContent = `${headerTitle} `;
 
             const statistics = `MAX: ${maxPrice.toFixed(1)} • AVG: ${avgPrice.toFixed(1)} • MIN: ${minPrice.toFixed(1)}`;
             document.getElementById('statistics').textContent = statistics;
+
+            // Update date navigation
+            document.getElementById('currentDate').textContent = dateStr;
+            updateNavigationButtons();
+        }
+
+        function updateNavigationButtons() {
+            const prevButton = document.getElementById('prevButton');
+            const nextButton = document.getElementById('nextButton');
+            
+            const today = new Date();
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            
+            const minDate = new Date('2020-01-01');
+            
+            // Enable/disable previous button
+            const prevDate = new Date(currentDate);
+            prevDate.setDate(prevDate.getDate() - 1);
+            prevButton.disabled = prevDate < minDate;
+            
+            // Enable/disable next button (can go to tomorrow but not beyond)
+            const nextDate = new Date(currentDate);
+            nextDate.setDate(nextDate.getDate() + 1);
+            nextButton.disabled = nextDate > tomorrow;
+        }
+
+        function navigateDate(direction) {
+            const newDate = new Date(currentDate);
+            newDate.setDate(newDate.getDate() + direction);
+            
+            const today = new Date();
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const minDate = new Date('2020-01-01');
+            
+            if (newDate >= minDate && newDate <= tomorrow) {
+                currentDate = newDate;
+                loadData(currentDate);
+            }
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            // Add event listeners for navigation buttons
+            document.getElementById('prevButton').addEventListener('click', () => navigateDate(-1));
+            document.getElementById('nextButton').addEventListener('click', () => navigateDate(1));
+            
+            // Add event listeners for threshold checkboxes
+            document.getElementById('threshold0').addEventListener('change', updateThresholdStates);
+            document.getElementById('threshold50').addEventListener('change', updateThresholdStates);
+            document.getElementById('threshold75').addEventListener('change', updateThresholdStates);
+            
+            // Add event listener for region dropdown
+            document.getElementById('regionDropdown').addEventListener('change', updateRegion);
+            
+            // Set default checkbox states
+            document.getElementById('threshold0').checked = true;
+            document.getElementById('threshold75').checked = true;
+            
             loadData();
         });
 
         window.addEventListener('resize', function() {
             if (chartData) {
-                setTimeout(() => graphPrice(chartData), 100);
+                setTimeout(() => graphPrice(chartData, currentDate), 100);
             }
         });
     </script>
@@ -556,7 +899,8 @@ async fn main() {
     let app = Router::new()
         .route("/", get(index))
         .route("/prices", get(prices))
-        .route("/fonts/:filename", get(serve_font));
+        .route("/prices/{year}/{month}/{day}/{region}", get(prices_for_date))
+        .route("/fonts/{filename}", get(serve_font));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
 
