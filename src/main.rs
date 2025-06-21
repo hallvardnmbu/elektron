@@ -1,12 +1,13 @@
 use axum::{
     http::StatusCode,
-    response::{Html, IntoResponse},
+    response::{Html, IntoResponse, Response},
     routing::get,
     Json, Router,
 };
 use chrono::{DateTime, Datelike, Local, Timelike};
 use serde::{Deserialize, Serialize};
 use tokio;
+use std::path::Path;
 
 #[derive(Debug, Deserialize)]
 struct PriceData {
@@ -25,6 +26,26 @@ struct ChartDataPoint {
     time: String,
     price_nok: f64,
     price_eur: f64,
+}
+
+async fn serve_font(axum::extract::Path(filename): axum::extract::Path<String>) -> Result<Response, StatusCode> {
+    let font_path = format!("src/font/{}", filename);
+    if Path::new(&font_path).exists() {
+        let font_data = tokio::fs::read(&font_path).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let mime_type = if filename.ends_with(".woff2") {
+            "font/woff2"
+        } else {
+            "application/octet-stream"
+        };
+        
+        Ok(Response::builder()
+            .header("content-type", mime_type)
+            .header("cache-control", "public, max-age=31536000")
+            .body(axum::body::Body::from(font_data))
+            .unwrap())
+    } else {
+        Err(StatusCode::NOT_FOUND)
+    }
 }
 
 async fn fetch() -> Result<Vec<PriceData>, Box<dyn std::error::Error>> {
@@ -87,70 +108,155 @@ async fn index() -> Html<&'static str> {
     <style>
         @font-face {
             font-family: 'JetBrainsMono';
-            src: url('./src/font/Regular.woff2') format('woff2');
+            src: url('/fonts/Regular.woff2') format('woff2');
             font-weight: 400;
+            font-style: normal;
+            font-display: swap;
         }
         @font-face {
             font-family: 'JetBrainsMono';
-            src: url('./src/font/Bold.woff2') format('woff2');
+            src: url('/fonts/Bold.woff2') format('woff2');
             font-weight: 700;
+            font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'JetBrainsMono';
+            src: url('/fonts/Light.woff2') format('woff2');
+            font-weight: 300;
+            font-style: normal;
+            font-display: swap;
         }
 
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            border-radius: 0 !important;
+        }
+
+        html, body {
+            height: 100%;
+            font-family: 'JetBrainsMono', 'JetBrains Mono', 'Courier New', monospace;
+            background: #ffffff;
+            color: #000000;
+            line-height: 1.2;
+            font-size: 14px;
+            font-weight: 400;
         }
 
         body {
-            font-family: 'JetBrains Mono', monospace;
-            background: white;
-            color: black;
-            padding: 20px;
-            line-height: 1.4;
-
             display: flex;
             flex-direction: column;
             align-items: center;
+            padding: 20px;
+            min-height: 100vh;
         }
 
         #header {
-            margin-bottom: 10px;
-            font-weight: bold;
-        }
-        #statistics {
-            white-space: pre;
-            margin-top: 20px;
+            font-weight: 700;
+            font-size: 16px;
+            margin-bottom: 20px;
+            text-align: center;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #000000;
+            padding-bottom: 10px;
+            width: 100%;
+            max-width: 800px;
         }
 
-        #graphContainer, #priceGraph {
-            width: 100%;
-        }
         #graphContainer {
-            margin-top: 30px;
-        }
-        #priceGraph {
+            width: 100%;
+            max-width: 800px;
             height: 400px;
+            margin: 20px 0;
+            border: 2px solid #000000;
+            background: #ffffff;
+            position: relative;
+        }
+
+        #priceGraph {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        #statistics {
+            font-weight: 700;
+            font-size: 16px;
+            margin-top: 20px;
+            text-align: center;
+            letter-spacing: 1px;
+            border: 2px solid #000000;
+            padding: 15px 20px;
+            background: #ffffff;
+            white-space: pre;
+            min-width: 300px;
         }
 
         .error {
-            border: 1px solid black;
-            padding: 10px;
-            margin: 10px 0;
+            border: 2px solid #000000;
+            background: #ffffff;
+            color: #000000;
+            padding: 15px 20px;
+            margin: 20px 0;
+            font-weight: 700;
+            text-align: center;
+            max-width: 600px;
+            width: 100%;
         }
 
+        .error::before {
+            content: "ERROR: ";
+            font-weight: 700;
+        }
+
+        /* Ensure no corner radii anywhere */
+        *, *::before, *::after {
+            border-radius: 0 !important;
+        }
+
+        /* Loading state */
+        .loading {
+            font-weight: 300;
+            text-align: center;
+            padding: 20px;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            
+            #header {
+                font-size: 14px;
+                margin-bottom: 15px;
+            }
+            
+            #graphContainer {
+                height: 300px;
+                margin: 15px 0;
+            }
+            
+            #statistics {
+                font-size: 14px;
+                padding: 10px 15px;
+                margin-top: 15px;
+            }
         }
     </style>
 </head>
 <body>
-    <div id="header"></div>
+    <div id="header">ELEKTRON</div>
+    <div class="loading" id="loading">LOADING DATA...</div>
 
-    <div id="graphContainer">
+    <div id="graphContainer" style="display: none;">
         <canvas id="priceGraph"></canvas>
     </div>
 
     <div id="error" class="error" style="display: none;"></div>
-    <div id="statistics"></div>
+    <div id="statistics" style="display: none;"></div>
 
     <script>
         let chartData = null;
@@ -178,10 +284,10 @@ async fn index() -> Html<&'static str> {
             let dailyData = dataObject.filter(item => item.time.startsWith(todayString));
             if (dailyData.length === 0) {
                 ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-                ctx.font = '16px JetBrains Mono';
-                ctx.fillStyle = 'black';
+                ctx.font = '14px JetBrainsMono';
+                ctx.fillStyle = '#000000';
                 ctx.textAlign = 'center';
-                ctx.fillText('No data available for this date.', canvas.width / dpr / 2, canvas.height / dpr / 2);
+                ctx.fillText('NO DATA AVAILABLE FOR THIS DATE', canvas.width / dpr / 2, canvas.height / dpr / 2);
                 return;
             }
 
@@ -194,30 +300,59 @@ async fn index() -> Html<&'static str> {
             const prices = stepData.map(item => item.price);
             const hours = stepData.map(item => item.hour);
 
-            const margin = { top: 20, right: 20, bottom: 30, left: 50 };
+            const margin = { top: 30, right: 30, bottom: 40, left: 60 };
             const graphWidth = canvas.width / dpr - margin.left - margin.right;
             const graphHeight = canvas.height / dpr - margin.top - margin.bottom;
 
             const maxPrice = Math.max(...prices);
             const minPrice = Math.min(...prices);
+            const priceRange = maxPrice - minPrice;
+            const paddedMax = maxPrice + (priceRange * 0.1);
+            const paddedMin = Math.max(0, minPrice - (priceRange * 0.1));
 
             ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-            ctx.font = '12px JetBrains Mono';
-            ctx.fillStyle = 'black';
+            ctx.font = '12px JetBrainsMono';
+            ctx.fillStyle = '#000000';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
 
-            // Draw Y-axis labels only (no grid or axis lines)
-            const yAxisTicks = 5;
+            // Draw Y-axis labels and grid lines
+            const yAxisTicks = 6;
             for (let i = 0; i <= yAxisTicks; i++) {
-                const value = minPrice + (maxPrice - minPrice) * i / yAxisTicks;
+                const value = paddedMin + (paddedMax - paddedMin) * i / yAxisTicks;
                 const y = margin.top + graphHeight - (graphHeight * i / yAxisTicks);
-                ctx.fillText(value.toFixed(2), margin.left - 40, y + 4);
+                
+                // Y-axis labels
+                ctx.fillText(value.toFixed(1), margin.left - 10, y);
+                
+                // Horizontal grid lines
+                ctx.beginPath();
+                ctx.moveTo(margin.left, y);
+                ctx.lineTo(margin.left + graphWidth, y);
+                ctx.strokeStyle = i === 0 ? '#000000' : '#cccccc';
+                ctx.lineWidth = i === 0 ? 2 : 1;
+                ctx.stroke();
             }
 
-            // Draw X-axis labels only (no grid or axis lines)
+            // Draw X-axis labels and grid lines
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
             const xTickDenominator = stepData.length - 1 > 0 ? stepData.length - 1 : 1;
             for (let i = 0; i < stepData.length; i++) {
                 const x = margin.left + (graphWidth / xTickDenominator) * i;
-                ctx.fillText(hours[i].toString().padStart(2, '0'), x - 6, margin.top + graphHeight + 20);
+                
+                // X-axis labels
+                ctx.fillText(hours[i].toString().padStart(2, '0'), x, margin.top + graphHeight + 10);
+                
+                // Vertical grid lines
+                if (i % 2 === 0) { // Show grid every 2 hours
+                    ctx.beginPath();
+                    ctx.moveTo(x, margin.top);
+                    ctx.lineTo(x, margin.top + graphHeight);
+                    ctx.strokeStyle = '#cccccc';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
             }
 
             // Draw step price line
@@ -225,7 +360,7 @@ async fn index() -> Html<&'static str> {
             for (let i = 0; i < stepData.length - 1; i++) {
                 const x1 = margin.left + (graphWidth / xTickDenominator) * i;
                 const x2 = margin.left + (graphWidth / xTickDenominator) * (i + 1);
-                const y = margin.top + graphHeight - ((stepData[i].price - minPrice) / (maxPrice - minPrice)) * graphHeight;
+                const y = margin.top + graphHeight - ((stepData[i].price - paddedMin) / (paddedMax - paddedMin)) * graphHeight;
                 if (i === 0) {
                     ctx.moveTo(x1, y);
                 } else {
@@ -233,8 +368,8 @@ async fn index() -> Html<&'static str> {
                 }
                 ctx.lineTo(x2, y); // horizontal step
             }
-            ctx.strokeStyle = 'black';
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 3;
             ctx.stroke();
 
             // --- Hover Functionality ---
@@ -247,7 +382,6 @@ async fn index() -> Html<&'static str> {
             let hoverLayer = document.createElement('canvas');
             hoverLayer.id = hoverLayerId;
             hoverLayer.style.position = "absolute";
-            // Position hoverLayer exactly over the canvas
             hoverLayer.style.left = canvas.offsetLeft + "px";
             hoverLayer.style.top = canvas.offsetTop + "px";
             hoverLayer.width = canvas.width;
@@ -264,7 +398,6 @@ async fn index() -> Html<&'static str> {
                 if (stepData.length < 2) return;
                 const rect = canvas.getBoundingClientRect();
                 const x = (event.clientX - rect.left) * (canvas.width / dpr / rect.width);
-                // Find which step (hour) the mouse is over
                 const xScale = graphWidth / xTickDenominator;
                 let hoverIndex = Math.floor((x - margin.left) / xScale);
                 if (hoverIndex < 0) hoverIndex = 0;
@@ -272,33 +405,50 @@ async fn index() -> Html<&'static str> {
                 const price = stepData[hoverIndex].price;
                 const hour = hours[hoverIndex];
                 const xStep = margin.left + xScale * hoverIndex;
-                const yStep = margin.top + graphHeight - ((price - minPrice) / (maxPrice - minPrice)) * graphHeight;
+                const yStep = margin.top + graphHeight - ((price - paddedMin) / (paddedMax - paddedMin)) * graphHeight;
 
                 hoverCtx.clearRect(0, 0, hoverLayer.width / dpr, hoverLayer.height / dpr);
-                hoverCtx.font = `12px 'JetBrains Mono'`;
-                hoverCtx.fillStyle = "black";
-                hoverCtx.textAlign = "left";
+                hoverCtx.font = '12px JetBrainsMono';
+                hoverCtx.fillStyle = '#000000';
+                hoverCtx.textAlign = 'left';
 
-                // Tooltip position: above the step
-                let textX = xStep + 5;
-                let textY = yStep - 10;
-                const text = `${price.toFixed(1)}`;
+                // Tooltip
+                const text = `${hour.toString().padStart(2, '0')}:00 - ${price.toFixed(1)} øre`;
                 const textMetrics = hoverCtx.measureText(text);
-                if (textX + textMetrics.width > canvas.width / dpr) {
+                let textX = xStep + 10;
+                let textY = yStep - 15;
+                
+                if (textX + textMetrics.width > canvas.width / dpr - 10) {
                     textX = xStep - textMetrics.width - 10;
                 }
-                if (textY - 12 < 0) {
-                    textY = yStep + 20;
+                if (textY < 20) {
+                    textY = yStep + 25;
                 }
+                
+                // Tooltip background
+                hoverCtx.fillStyle = '#ffffff';
+                hoverCtx.fillRect(textX - 5, textY - 15, textMetrics.width + 10, 20);
+                hoverCtx.strokeStyle = '#000000';
+                hoverCtx.lineWidth = 2;
+                hoverCtx.strokeRect(textX - 5, textY - 15, textMetrics.width + 10, 20);
+                
+                // Tooltip text
+                hoverCtx.fillStyle = '#000000';
                 hoverCtx.fillText(text, textX, textY);
 
-                // Draw vertical line at the left edge of the step
+                // Vertical line
                 hoverCtx.beginPath();
                 hoverCtx.moveTo(xStep, margin.top);
                 hoverCtx.lineTo(xStep, margin.top + graphHeight);
-                hoverCtx.strokeStyle = 'black';
+                hoverCtx.strokeStyle = '#000000';
                 hoverCtx.lineWidth = 2;
                 hoverCtx.stroke();
+                
+                // Point marker
+                hoverCtx.beginPath();
+                hoverCtx.arc(xStep, yStep, 4, 0, 2 * Math.PI);
+                hoverCtx.fillStyle = '#000000';
+                hoverCtx.fill();
             };
 
             canvas.onmouseleave = function() {
@@ -309,28 +459,36 @@ async fn index() -> Html<&'static str> {
         async function loadData() {
             const error = document.getElementById('error');
             const statistics = document.getElementById('statistics');
+            const loading = document.getElementById('loading');
+            const graphContainer = document.getElementById('graphContainer');
 
             error.style.display = 'none';
-            statistics.innerHTML = '';
+            statistics.style.display = 'none';
+            loading.style.display = 'block';
+            graphContainer.style.display = 'none';
 
             try {
                 const response = await fetch('/prices');
                 if (!response.ok) {
-                    throw new Error('Feilkode ' + response.status + ' :-(');
+                    throw new Error('HTTP ERROR ' + response.status);
                 }
 
                 const priceData = await response.json();
 
                 if (priceData.length === 0) {
-                    throw new Error('A-hva? Jeg fant ikke noe data :-(');
+                    throw new Error('NO DATA AVAILABLE');
                 }
 
+                loading.style.display = 'none';
                 displayData(priceData);
+                graphContainer.style.display = 'block';
+                statistics.style.display = 'block';
 
-                chartData = priceData; // chartData is the full data from /prices
-                graphPrice(chartData); // Always use today's data
+                chartData = priceData;
+                setTimeout(() => graphPrice(chartData), 100); // Allow DOM to update
 
             } catch (err) {
+                loading.style.display = 'none';
                 error.textContent = err.message;
                 error.style.display = 'block';
             }
@@ -342,15 +500,14 @@ async fn index() -> Html<&'static str> {
             const maxPrice = Math.max(...prices);
             const minPrice = Math.min(...prices);
 
-            // Display current date
             const now = new Date();
             const dateStr = now.getDate().toString().padStart(2, '0') + '-' +
                            (now.getMonth() + 1).toString().padStart(2, '0') + '-' +
                            now.getFullYear();
-            const header = `Priser den ${dateStr} for NO2 i øre / kWh`;
+            const header = `ELECTRICITY PRICES ${dateStr} (NO2) - øre/kWh`;
             document.getElementById('header').textContent = header;
 
-            const statistics = `Maks ${maxPrice.toFixed(1)} • Gjn. ${avgPrice.toFixed(1)} • Min. ${minPrice.toFixed(1)}`;
+            const statistics = `MAX: ${maxPrice.toFixed(1)} • AVG: ${avgPrice.toFixed(1)} • MIN: ${minPrice.toFixed(1)}`;
             document.getElementById('statistics').textContent = statistics;
         }
 
@@ -359,9 +516,8 @@ async fn index() -> Html<&'static str> {
         });
 
         window.addEventListener('resize', function() {
-            // Only redraw if we have cached data
             if (chartData) {
-                graphPrice(chartData); // Always use today's data
+                setTimeout(() => graphPrice(chartData), 100);
             }
         });
     </script>
@@ -375,7 +531,8 @@ async fn index() -> Html<&'static str> {
 async fn main() {
     let app = Router::new()
         .route("/", get(index))
-        .route("/prices", get(prices));
+        .route("/prices", get(prices))
+        .route("/fonts/:filename", get(serve_font));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
 
