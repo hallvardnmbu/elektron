@@ -29,11 +29,35 @@ struct ChartDataPoint {
 }
 
 async fn serve_font(axum::extract::Path(filename): axum::extract::Path<String>) -> Result<Response, StatusCode> {
-    let font_path = format!("src/font/{}", filename);
-    if Path::new(&font_path).exists() {
+    // Prevent path traversal attacks by sanitizing the filename
+    if filename.contains("..") || filename.contains('/') || filename.contains('\\') {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    
+    // Only allow specific font file extensions
+    if !filename.ends_with(".woff2") && !filename.ends_with(".woff") && !filename.ends_with(".ttf") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    
+    let font_dir = Path::new("src/font");
+    let font_path = font_dir.join(&filename);
+    
+    // Ensure the resolved path is within the font directory
+    let canonical_font_dir = font_dir.canonicalize().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let canonical_font_path = font_path.canonicalize().map_err(|_| StatusCode::NOT_FOUND)?;
+    
+    if !canonical_font_path.starts_with(&canonical_font_dir) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    
+    if font_path.exists() {
         let font_data = tokio::fs::read(&font_path).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         let mime_type = if filename.ends_with(".woff2") {
             "font/woff2"
+        } else if filename.ends_with(".woff") {
+            "font/woff"
+        } else if filename.ends_with(".ttf") {
+            "font/ttf"
         } else {
             "application/octet-stream"
         };
