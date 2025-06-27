@@ -221,7 +221,6 @@ async fn index() -> Html<&'static str> {
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 20px;
             min-height: 100vh;
         }
 
@@ -232,7 +231,9 @@ async fn index() -> Html<&'static str> {
             text-align: center;
             letter-spacing: 0.5px;
             border-bottom: 2px solid #1D1C1A;
-            padding-bottom: 10px;
+            border-left: 2px solid #1D1C1A;
+            border-right: 2px solid #1D1C1A;
+            padding: 10px;
             width: 100%;
             max-width: 800px;
         }
@@ -241,8 +242,7 @@ async fn index() -> Html<&'static str> {
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 15px;
-            margin: 15px 0;
+            gap: 10px;
             padding: 10px;
             background: #ffffff;
             font-weight: 700;
@@ -254,7 +254,7 @@ async fn index() -> Html<&'static str> {
             background: #ffffff;
             border: 2px solid #1D1C1A;
             color: #1D1C1A;
-            padding: 5px 10px;
+            padding: 5px;
             font-family: 'JetBrainsMono', monospace;
             font-weight: 700;
             font-size: 14px;
@@ -291,7 +291,7 @@ async fn index() -> Html<&'static str> {
             justify-content: center;
             align-items: center;
             gap: 20px;
-            margin: 15px 0;
+            margin: 15px 0 0 0;
             padding: 10px;
             border: 2px solid #1D1C1A;
             background: #ffffff;
@@ -299,6 +299,7 @@ async fn index() -> Html<&'static str> {
             max-width: 800px;
             width: 100%;
             flex-wrap: wrap;
+            box-sizing: border-box;
         }
 
         .threshold-checkbox {
@@ -373,10 +374,13 @@ async fn index() -> Html<&'static str> {
             width: 100%;
             max-width: 800px;
             height: 400px;
-            margin: 20px 0;
+            margin: 0;
             border: 2px solid #1D1C1A;
+            border-top: 10px solid #1D1C1A;
+            border-bottom: 10px solid #1D1C1A;
             background: #ffffff;
             position: relative;
+            box-sizing: border-box;
         }
 
         #priceGraph {
@@ -387,11 +391,11 @@ async fn index() -> Html<&'static str> {
 
         #statistics {
             font-weight: 700;
-            font-size: 16px;
-            margin-top: 20px;
+            font-size: 12px;
+            margin-top: 0;
             letter-spacing: 1px;
             border: 2px solid #1D1C1A;
-            padding: 15px 20px;
+            padding: 10px;
             background: #ffffff;
             min-width: 300px;
             max-width: 800px;
@@ -399,13 +403,14 @@ async fn index() -> Html<&'static str> {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            box-sizing: border-box;
         }
 
         .error {
             border: 2px solid #1D1C1A;
             background: #ffffff;
             color: #1D1C1A;
-            padding: 15px 20px;
+            padding: 10px;
             margin: 20px 0;
             font-weight: 700;
             text-align: center;
@@ -427,7 +432,7 @@ async fn index() -> Html<&'static str> {
         .loading {
             font-weight: 300;
             text-align: center;
-            padding: 20px;
+            padding: 10px;
         }
 
         /* Responsive adjustments */
@@ -448,7 +453,7 @@ async fn index() -> Html<&'static str> {
             
             #statistics {
                 font-size: 14px;
-                padding: 10px 15px;
+                padding: 10px;
                 margin-top: 15px;
             }
         }
@@ -773,7 +778,6 @@ async fn index() -> Html<&'static str> {
                 let url = '/prices';
                 if (date) {
                     url = `/prices/${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}/${currentRegion}`;
-                    console.log('Fetching URL:', url);
                 }
 
                 const response = await fetch(url);
