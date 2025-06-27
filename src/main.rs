@@ -236,6 +236,10 @@ async fn index() -> Html<&'static str> {
             padding: 10px;
             width: 100%;
             max-width: 800px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
         }
 
         #dateNavigation {
@@ -341,7 +345,6 @@ async fn index() -> Html<&'static str> {
 
         #regionSelector {
             display: inline-block;
-            margin-left: 10px;
         }
 
         .region-dropdown {
@@ -461,6 +464,7 @@ async fn index() -> Html<&'static str> {
 </head>
 <body>
     <div id="header">
+        <span id="headerTitle">Strømpriser (øre/kWh) i</span>
         <span id="regionSelector">
             <select class="region-dropdown" id="regionDropdown">
                 <option value="NO1">NO1</option>
@@ -820,7 +824,7 @@ async fn index() -> Html<&'static str> {
                            (displayDate.getMonth() + 1).toString().padStart(2, '0') + '-' +
                            displayDate.getFullYear();
             const headerTitle = `Strømpriser (øre/kWh) den ${dateStr} i`;
-            document.getElementById('header').childNodes[0].textContent = `${headerTitle} `;
+            document.getElementById('headerTitle').textContent = headerTitle;
 
             const statisticsElement = document.getElementById('statistics');
             statisticsElement.innerHTML = `
