@@ -773,6 +773,7 @@ async fn index() -> Html<&'static str> {
             statistics.style.display = 'none';
             loading.style.display = 'block';
             graphContainer.style.display = 'none';
+            thresholdControls.style.display = 'none';
 
             try {
                 let url = '/prices';
