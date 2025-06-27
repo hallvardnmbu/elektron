@@ -131,8 +131,10 @@ async fn prices_for_date(axum::extract::Path((year, month, day, region)): axum::
     if month < 1 || month > 12 {
         return (StatusCode::BAD_REQUEST, "Month must be between 1 and 12".to_string()).into_response();
     }
-    if day < 1 || day > 31 {
-        return (StatusCode::BAD_REQUEST, "Day must be between 1 and 31".to_string()).into_response();
+    
+    // Validate date exists (accounts for month lengths and leap years)
+    if chrono::NaiveDate::from_ymd_opt(year, month, day).is_none() {
+        return (StatusCode::BAD_REQUEST, "Invalid date".to_string()).into_response();
     }
     
     // Validate region
@@ -209,7 +211,7 @@ async fn index() -> Html<&'static str> {
             height: 100%;
             font-family: 'JetBrainsMono', 'JetBrains Mono', 'Courier New', monospace;
             background: #ffffff;
-            color: #000000;
+            color: #1D1C1A;
             line-height: 1.2;
             font-size: 14px;
             font-weight: 400;
@@ -229,7 +231,7 @@ async fn index() -> Html<&'static str> {
             margin-bottom: 20px;
             text-align: center;
             letter-spacing: 0.5px;
-            border-bottom: 2px solid #000000;
+            border-bottom: 2px solid #1D1C1A;
             padding-bottom: 10px;
             width: 100%;
             max-width: 800px;
@@ -242,7 +244,6 @@ async fn index() -> Html<&'static str> {
             gap: 15px;
             margin: 15px 0;
             padding: 10px;
-            border: 2px solid #000000;
             background: #ffffff;
             font-weight: 700;
             max-width: 800px;
@@ -251,8 +252,8 @@ async fn index() -> Html<&'static str> {
 
         .nav-button {
             background: #ffffff;
-            border: 2px solid #000000;
-            color: #000000;
+            border: 2px solid #1D1C1A;
+            color: #1D1C1A;
             padding: 5px 10px;
             font-family: 'JetBrainsMono', monospace;
             font-weight: 700;
@@ -262,7 +263,7 @@ async fn index() -> Html<&'static str> {
         }
 
         .nav-button:hover {
-            background: #000000;
+            background: #1D1C1A;
             color: #ffffff;
         }
 
@@ -292,7 +293,7 @@ async fn index() -> Html<&'static str> {
             gap: 20px;
             margin: 15px 0;
             padding: 10px;
-            border: 2px solid #000000;
+            border: 2px solid #1D1C1A;
             background: #ffffff;
             font-weight: 700;
             max-width: 800px;
@@ -314,18 +315,17 @@ async fn index() -> Html<&'static str> {
             appearance: none;
             width: 16px;
             height: 16px;
-            border: 2px solid #000000;
+            border: 2px solid #1D1C1A;
             background: #ffffff;
             cursor: pointer;
             position: relative;
         }
 
         .threshold-checkbox input[type="checkbox"]:checked {
-            background: #000000;
+            background: #1D1C1A;
         }
 
         .threshold-checkbox input[type="checkbox"]:checked::after {
-            content: '✓';
             position: absolute;
             top: -2px;
             left: 2px;
@@ -334,9 +334,9 @@ async fn index() -> Html<&'static str> {
             font-size: 12px;
         }
 
-        .threshold-zero { color: #cc0000; }
-        .threshold-fifty { color: #ff6600; }
-        .threshold-ninety { color: #cc0000; }
+        .threshold-zero { color: #CC0000; }
+        .threshold-fifty { color: #008E00; }
+        .threshold-ninety { color: #CC0000; }
 
         #regionSelector {
             display: inline-block;
@@ -345,8 +345,8 @@ async fn index() -> Html<&'static str> {
 
         .region-dropdown {
             background: #ffffff;
-            border: 2px solid #000000;
-            color: #000000;
+            border: 2px solid #1D1C1A;
+            color: #1D1C1A;
             padding: 2px 6px;
             font-family: 'JetBrainsMono', monospace;
             font-weight: 700;
@@ -358,13 +358,13 @@ async fn index() -> Html<&'static str> {
 
         .region-dropdown:focus {
             outline: none;
-            background: #000000;
+            background: #1D1C1A;
             color: #ffffff;
         }
 
         .region-dropdown option {
             background: #ffffff;
-            color: #000000;
+            color: #1D1C1A;
             font-family: 'JetBrainsMono', monospace;
             font-weight: 700;
         }
@@ -374,7 +374,7 @@ async fn index() -> Html<&'static str> {
             max-width: 800px;
             height: 400px;
             margin: 20px 0;
-            border: 2px solid #000000;
+            border: 2px solid #1D1C1A;
             background: #ffffff;
             position: relative;
         }
@@ -389,19 +389,22 @@ async fn index() -> Html<&'static str> {
             font-weight: 700;
             font-size: 16px;
             margin-top: 20px;
-            text-align: center;
             letter-spacing: 1px;
-            border: 2px solid #000000;
+            border: 2px solid #1D1C1A;
             padding: 15px 20px;
             background: #ffffff;
-            white-space: pre;
             min-width: 300px;
+            max-width: 800px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .error {
-            border: 2px solid #000000;
+            border: 2px solid #1D1C1A;
             background: #ffffff;
-            color: #000000;
+            color: #1D1C1A;
             padding: 15px 20px;
             margin: 20px 0;
             font-weight: 700;
@@ -453,7 +456,6 @@ async fn index() -> Html<&'static str> {
 </head>
 <body>
     <div id="header">
-        ELEKTRON
         <span id="regionSelector">
             <select class="region-dropdown" id="regionDropdown">
                 <option value="NO1">NO1</option>
@@ -466,9 +468,9 @@ async fn index() -> Html<&'static str> {
     </div>
     
     <div id="dateNavigation" style="display: none;">
-        <button class="nav-button" id="prevButton">◀ PREV</button>
+        <button class="nav-button" id="prevButton">◀ Forrige</button>
         <div id="currentDate"></div>
-        <button class="nav-button" id="nextButton">NEXT ▶</button>
+        <button class="nav-button" id="nextButton">Neste ▶</button>
     </div>
     
     <div id="thresholdControls" style="display: none;">
@@ -478,7 +480,7 @@ async fn index() -> Html<&'static str> {
         </label>
         <label class="threshold-checkbox threshold-fifty">
             <input type="checkbox" id="threshold50" />
-            <span>50 øre</span>
+            <span>Norgespris</span>
         </label>
         <label class="threshold-checkbox threshold-ninety">
             <input type="checkbox" id="threshold75" />
@@ -486,7 +488,7 @@ async fn index() -> Html<&'static str> {
         </label>
     </div>
     
-    <div class="loading" id="loading">LOADING DATA...</div>
+    <div class="loading" id="loading">Laster laster laster...</div>
 
     <div id="graphContainer" style="display: none;">
         <canvas id="priceGraph"></canvas>
@@ -501,7 +503,7 @@ async fn index() -> Html<&'static str> {
         let currentRegion = 'NO2';
         let thresholdStates = {
             zero: true,
-            fifty: false,
+            fifty: true,
             seventyFive: true
         };
 
@@ -528,9 +530,9 @@ async fn index() -> Html<&'static str> {
             if (dailyData.length === 0) {
                 ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
                 ctx.font = '14px JetBrainsMono, "JetBrains Mono", monospace';
-                ctx.fillStyle = '#000000';
+                ctx.fillStyle = '#1D1C1A';
                 ctx.textAlign = 'center';
-                ctx.fillText('NO DATA AVAILABLE FOR THIS DATE', canvas.width / dpr / 2, canvas.height / dpr / 2);
+                ctx.fillText('Hmm. Ingen data.', canvas.width / dpr / 2, canvas.height / dpr / 2);
                 
                 // Remove any existing hover functionality for no data case
                 canvas.onmousemove = null;
@@ -563,7 +565,7 @@ async fn index() -> Html<&'static str> {
             ctx.textAlign = 'right';
             ctx.textBaseline = 'middle';
 
-            // Draw Y-axis labels and grid lines
+            // Draw Y-axis labels
             const yAxisTicks = 6;
             for (let i = 0; i <= yAxisTicks; i++) {
                 const value = paddedMin + (paddedMax - paddedMin) * i / yAxisTicks;
@@ -571,48 +573,47 @@ async fn index() -> Html<&'static str> {
                 
                 // Y-axis labels
                 ctx.fillText(value.toFixed(1), margin.left - 10, y);
-                
-                // Horizontal grid lines
-                ctx.beginPath();
-                ctx.moveTo(margin.left, y);
-                ctx.lineTo(margin.left + graphWidth, y);
-                ctx.strokeStyle = i === 0 ? '#000000' : '#cccccc';
-                ctx.lineWidth = i === 0 ? 2 : 1;
-                ctx.stroke();
             }
 
-            // Draw X-axis labels and grid lines
+            // Draw X-axis labels with responsive spacing
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
             const xTickDenominator = stepData.length - 1 > 0 ? stepData.length - 1 : 1;
+            
+            // Calculate if there's enough space for all hour labels
+            ctx.font = '12px JetBrainsMono, "JetBrains Mono", monospace';
+            const sampleText = '00';
+            const labelWidth = ctx.measureText(sampleText).width;
+            const minLabelSpacing = labelWidth + 10; // Add some padding
+            const availableSpacing = graphWidth / (stepData.length - 1);
+            
+            // Determine label step based on actual space availability
+            let labelStep = 1;
+            if (availableSpacing < minLabelSpacing) {
+                if (availableSpacing < minLabelSpacing / 2) {
+                    labelStep = 4; // Show every 4th hour when very cramped
+                } else {
+                    labelStep = 2; // Show every 2nd hour when somewhat cramped
+                }
+            }
+            
             for (let i = 0; i < stepData.length; i++) {
                 const x = margin.left + (graphWidth / xTickDenominator) * i;
                 
-                // X-axis labels
-                ctx.fillText(hours[i].toString().padStart(2, '0'), x, margin.top + graphHeight + 10);
-                
-                // Vertical grid lines
-                if (i % 2 === 0) { // Show grid every 2 hours
-                    ctx.beginPath();
-                    ctx.moveTo(x, margin.top);
-                    ctx.lineTo(x, margin.top + graphHeight);
-                    ctx.strokeStyle = '#cccccc';
-                    ctx.lineWidth = 1;
-                    ctx.stroke();
+                // X-axis labels - only show at specified intervals
+                if (i % labelStep === 0 || i === stepData.length - 1) {
+                    ctx.fillText(hours[i].toString().padStart(2, '0'), x, margin.top + graphHeight + 10);
                 }
             }
 
-            // Draw step price line with different colors for day/night hours
+            // Draw step price line
             for (let i = 0; i < stepData.length - 1; i++) {
                 const x1 = margin.left + (graphWidth / xTickDenominator) * i;
                 const x2 = margin.left + (graphWidth / xTickDenominator) * (i + 1);
                 const y1 = margin.top + graphHeight - ((stepData[i].price - paddedMin) / (paddedMax - paddedMin)) * graphHeight;
                 const y2 = margin.top + graphHeight - ((stepData[i + 1].price - paddedMin) / (paddedMax - paddedMin)) * graphHeight;
                 
-                // Determine color based on hour (gray for before 07:00 and after 22:00)
-                const hour = stepData[i].hour;
-                const isNightTime = hour < 7 || hour > 22;
-                const lineColor = isNightTime ? '#888888' : '#000000';
+                const lineColor = '#1D1C1A';
                 
                 ctx.beginPath();
                 // Draw horizontal line for current step
@@ -621,7 +622,7 @@ async fn index() -> Html<&'static str> {
                 // Draw vertical line to next step level
                 ctx.lineTo(x2, y2);
                 ctx.strokeStyle = lineColor;
-                ctx.lineWidth = 3;
+                ctx.lineWidth = 2;
                 ctx.stroke();
             }
 
@@ -665,7 +666,7 @@ async fn index() -> Html<&'static str> {
 
                 hoverCtx.clearRect(0, 0, hoverLayer.width / dpr, hoverLayer.height / dpr);
                 hoverCtx.font = '12px JetBrainsMono, "JetBrains Mono", monospace';
-                hoverCtx.fillStyle = '#000000';
+                hoverCtx.fillStyle = '#1D1C1A';
                 hoverCtx.textAlign = 'left';
 
                 // Tooltip
@@ -684,26 +685,26 @@ async fn index() -> Html<&'static str> {
                 // Tooltip background
                 hoverCtx.fillStyle = '#ffffff';
                 hoverCtx.fillRect(textX - 5, textY - 15, textMetrics.width + 10, 20);
-                hoverCtx.strokeStyle = '#000000';
+                hoverCtx.strokeStyle = '#1D1C1A';
                 hoverCtx.lineWidth = 2;
                 hoverCtx.strokeRect(textX - 5, textY - 15, textMetrics.width + 10, 20);
                 
                 // Tooltip text
-                hoverCtx.fillStyle = '#000000';
+                hoverCtx.fillStyle = '#1D1C1A';
                 hoverCtx.fillText(text, textX, textY);
 
                 // Vertical line
                 hoverCtx.beginPath();
                 hoverCtx.moveTo(xStep, margin.top);
                 hoverCtx.lineTo(xStep, margin.top + graphHeight);
-                hoverCtx.strokeStyle = '#000000';
+                hoverCtx.strokeStyle = '#1D1C1A';
                 hoverCtx.lineWidth = 2;
                 hoverCtx.stroke();
                 
                 // Point marker
                 hoverCtx.beginPath();
                 hoverCtx.arc(xStep, yStep, 4, 0, 2 * Math.PI);
-                hoverCtx.fillStyle = '#000000';
+                hoverCtx.fillStyle = '#1D1C1A';
                 hoverCtx.fill();
             };
 
@@ -714,9 +715,9 @@ async fn index() -> Html<&'static str> {
 
         function drawThresholdLines(ctx, margin, graphWidth, graphHeight, paddedMin, paddedMax) {
             const thresholds = [
-                { value: 0, color: '#cc0000', enabled: thresholdStates.zero },
-                { value: 50, color: '#ff6600', enabled: thresholdStates.fifty },
-                { value: 75, color: '#cc0000', enabled: thresholdStates.seventyFive }
+                { value: 0, name: '0 øre', color: '#CC0000', enabled: thresholdStates.zero },
+                { value: 50, name: 'Norgespris', color: '#008E00', enabled: thresholdStates.fifty },
+                { value: 75, name: '75 øre', color: '#CC0000', enabled: thresholdStates.seventyFive }
             ];
 
             thresholds.forEach(threshold => {
@@ -728,16 +729,14 @@ async fn index() -> Html<&'static str> {
                     ctx.lineTo(margin.left + graphWidth, y);
                     ctx.strokeStyle = threshold.color;
                     ctx.lineWidth = 2;
-                    ctx.setLineDash([5, 5]);
                     ctx.stroke();
-                    ctx.setLineDash([]); // Reset dash pattern
                     
                     // Add threshold label
                     ctx.font = '11px JetBrainsMono, "JetBrains Mono", monospace';
                     ctx.fillStyle = threshold.color;
                     ctx.textAlign = 'left';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText(`${threshold.value} øre`, margin.left + 5, y - 10);
+                    ctx.fillText(`${threshold.name}`, margin.left + 5, y - 10);
                 }
             });
         }
@@ -785,13 +784,13 @@ async fn index() -> Html<&'static str> {
                 const priceData = await response.json();
 
                 if (priceData.length === 0) {
-                    throw new Error('NO DATA AVAILABLE');
+                    throw new Error('Hmm. Ingen data.');
                 }
 
                 loading.style.display = 'none';
                 displayData(priceData, date);
                 graphContainer.style.display = 'block';
-                statistics.style.display = 'block';
+                statistics.style.display = 'flex';
                 dateNavigation.style.display = 'flex';
                 thresholdControls.style.display = 'flex';
 
@@ -815,11 +814,15 @@ async fn index() -> Html<&'static str> {
             const dateStr = displayDate.getDate().toString().padStart(2, '0') + '-' +
                            (displayDate.getMonth() + 1).toString().padStart(2, '0') + '-' +
                            displayDate.getFullYear();
-            const headerTitle = `ELECTRICITY PRICES ${dateStr} (øre/kWh)`;
+            const headerTitle = `Strømpriser (øre/kWh) den ${dateStr} i`;
             document.getElementById('header').childNodes[0].textContent = `${headerTitle} `;
 
-            const statistics = `MAX: ${maxPrice.toFixed(1)} • AVG: ${avgPrice.toFixed(1)} • MIN: ${minPrice.toFixed(1)}`;
-            document.getElementById('statistics').textContent = statistics;
+            const statisticsElement = document.getElementById('statistics');
+            statisticsElement.innerHTML = `
+                <span>Min.: ${minPrice.toFixed(1)}</span>
+                <span>Gjn.: ${avgPrice.toFixed(1)}</span>
+                <span>Maks: ${maxPrice.toFixed(1)}</span>
+            `;
 
             // Update date navigation
             document.getElementById('currentDate').textContent = dateStr;
@@ -877,6 +880,7 @@ async fn index() -> Html<&'static str> {
             
             // Set default checkbox states
             document.getElementById('threshold0').checked = true;
+            document.getElementById('threshold50').checked = true;
             document.getElementById('threshold75').checked = true;
             
             loadData();
