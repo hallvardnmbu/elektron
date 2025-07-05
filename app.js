@@ -48,7 +48,7 @@ export async function elektronApp() {
             const data = await fetchPrices(now.getFullYear(), now.getMonth() + 1, now.getDate(), 'NO2');
             
             const chart = data.map(item => {
-                const hour = new Date(item.time_start).getHours();
+                const hour = new Date(item.time_start).getUTCHours();
                 return {
                     hour,
                     price: item.NOK_per_kWh * 100.0,
