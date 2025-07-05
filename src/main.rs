@@ -915,8 +915,8 @@ async fn main() {
         .route("/prices/{year}/{month}/{day}/{region}", get(prices_for_date))
         .route("/fonts/{filename}", get(serve_font));
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:8081").await.unwrap();
 
-    println!("Server running on http://localhost:3000");
+    println!("Server running on http://localhost:8081");
     axum::serve(listener, app).await.unwrap();
 }
