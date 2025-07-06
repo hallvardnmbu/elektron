@@ -80,12 +80,24 @@ const elektronApp = new Elysia()
             const monthNum = parseInt(month);
             const dayNum = parseInt(day);
             
+            // Check for NaN values (invalid numeric inputs)
+            if (isNaN(yearNum) || isNaN(monthNum) || isNaN(dayNum)) {
+                return Response.json({ message: 'Year, month, and day must be valid numbers' }, { status: 400 });
+            }
+            
             if (yearNum < 2020 || yearNum > 2030) {
                 return Response.json({ message: 'Year must be between 2020 and 2030' }, { status: 400 });
             }
             if (monthNum < 1 || monthNum > 12) {
                 return Response.json({ message: 'Month must be between 1 and 12' }, { status: 400 });
             }
+            
+            // Validate day for the given month and year
+            const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
+            if (dayNum < 1 || dayNum > daysInMonth) {
+                return Response.json({ message: `Day must be between 1 and ${daysInMonth} for month ${monthNum}` }, { status: 400 });
+            }
+            
             if (!['NO1', 'NO2', 'NO3', 'NO4', 'NO5'].includes(region)) {
                 return Response.json({ message: 'Region must be NO1-NO5' }, { status: 400 });
             }
