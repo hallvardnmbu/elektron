@@ -1,48 +1,56 @@
-import express from 'express';
-import axios from 'axios';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import fs from 'fs/promises';
+import { Elysia } from 'elysia';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Fetch electricity prices
+async function fetchPrices(year, month, day, region) {
+    const url = `https://www.hvakosterstrommen.no/api/v1/prices/${year}/${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}_${region}.json`;
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response.json();
+}
 
-export async function elektronApp() {
-    const app = express();
-
-    // Serve static font files
-    app.get('/fonts/:filename', async (req, res) => {
+const elektronApp = new Elysia()
+    .get('/', () => {
+        return new Response(Bun.file('index.html'), {
+            headers: {
+                'content-type': 'text/html'
+            }
+        });
+    })
+    .get('/fonts/:filename', async ({ params }) => {
         try {
-            const filename = req.params.filename;
-            // Security check
+            const { filename } = params;
+            
+            // Security check - prevent directory traversal
             if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
-                return res.status(400).send('Invalid filename');
+                return new Response('Invalid filename', { status: 400 });
             }
             
-            const fontPath = path.join(__dirname, 'src/font', filename);
-            const fontData = await fs.readFile(fontPath);
+            const fontPath = `font/${filename}`;
+            const fontFile = Bun.file(fontPath);
+            
+            // Check if file exists
+            if (!await fontFile.exists()) {
+                return new Response('Font not found', { status: 404 });
+            }
             
             let mimeType = 'application/octet-stream';
             if (filename.endsWith('.woff2')) mimeType = 'font/woff2';
             else if (filename.endsWith('.woff')) mimeType = 'font/woff';
             else if (filename.endsWith('.ttf')) mimeType = 'font/ttf';
             
-            res.setHeader('content-type', mimeType);
-            res.setHeader('cache-control', 'public, max-age=31536000');
-            res.send(fontData);
+            return new Response(fontFile, {
+                headers: {
+                    'content-type': mimeType,
+                    'cache-control': 'public, max-age=31536000' // Cache for 1 year
+                }
+            });
         } catch (error) {
-            res.status(404).send('Font not found');
+            return new Response('Font not found', { status: 404 });
         }
-    });
-
-    // Fetch electricity prices
-    async function fetchPrices(year, month, day, region) {
-        const url = `https://www.hvakosterstrommen.no/api/v1/prices/${year}/${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}_${region}.json`;
-        const response = await axios.get(url);
-        return response.data;
-    }
-
-    app.get('/prices', async (req, res) => {
+    })
+    .get('/prices', async () => {
         try {
             const now = new Date();
             const data = await fetchPrices(now.getFullYear(), now.getMonth() + 1, now.getDate(), 'NO2');
@@ -58,28 +66,31 @@ export async function elektronApp() {
                 };
             });
             
-            res.json(chart);
+            return Response.json(chart);
         } catch (error) {
-            res.status(500).json({ message: "Finner ikke noe data. :-(" });
+            return Response.json({ message: "Finner ikke noe data. :-(" }, { status: 500 });
         }
-    });
-
-    app.get('/prices/:year/:month/:day/:region', async (req, res) => {
+    })
+    .get('/prices/:year/:month/:day/:region', async ({ params }) => {
         try {
-            const { year, month, day, region } = req.params;
+            const { year, month, day, region } = params;
             
             // Validation
-            if (year < 2020 || year > 2030) {
-                return res.status(400).json({ message: 'Year must be between 2020 and 2030' });
+            const yearNum = parseInt(year);
+            const monthNum = parseInt(month);
+            const dayNum = parseInt(day);
+            
+            if (yearNum < 2020 || yearNum > 2030) {
+                return Response.json({ message: 'Year must be between 2020 and 2030' }, { status: 400 });
             }
-            if (month < 1 || month > 12) {
-                return res.status(400).json({ message: 'Month must be between 1 and 12' });
+            if (monthNum < 1 || monthNum > 12) {
+                return Response.json({ message: 'Month must be between 1 and 12' }, { status: 400 });
             }
             if (!['NO1', 'NO2', 'NO3', 'NO4', 'NO5'].includes(region)) {
-                return res.status(400).json({ message: 'Region must be NO1-NO5' });
+                return Response.json({ message: 'Region must be NO1-NO5' }, { status: 400 });
             }
             
-            const data = await fetchPrices(year, month, day, region);
+            const data = await fetchPrices(yearNum, monthNum, dayNum, region);
             
             const chart = data.map(item => {
                 const hour = new Date(item.time_start).getHours();
@@ -92,16 +103,15 @@ export async function elektronApp() {
                 };
             });
             
-            res.json(chart);
+            return Response.json(chart);
         } catch (error) {
-            res.status(500).json({ message: "Noe gikk galt." });
+            return Response.json({ message: "Noe gikk galt." }, { status: 500 });
         }
     });
 
-    // Serve the HTML page
-    app.get('/', (req, res) => {
-        res.sendFile(path.join(__dirname, 'index.html'));
-    });
-    
-    return app;
+export default elektronApp;
+
+if (import.meta.main) {
+    elektronApp.listen(3000);
+    console.log(`http://${elektronApp.server?.hostname}:${elektronApp.server?.port}`);
 }

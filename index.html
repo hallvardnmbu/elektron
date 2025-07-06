@@ -2,6 +2,8 @@
 <html>
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Hold styr på strømprisene i Norge.">
     <title>elektron</title>
     <style>
         @font-face {
@@ -10,6 +12,7 @@
             font-weight: 400;
             font-style: normal;
             font-display: swap;
+            font-preload: true;
         }
         @font-face {
             font-family: 'JetBrainsMono';
@@ -17,6 +20,7 @@
             font-weight: 700;
             font-style: normal;
             font-display: swap;
+            font-preload: true;
         }
         @font-face {
             font-family: 'JetBrainsMono';
@@ -24,6 +28,7 @@
             font-weight: 300;
             font-style: normal;
             font-display: swap;
+            font-preload: true;
         }
 
         * {
@@ -606,9 +611,14 @@
                     url = '/prices/' + date.getFullYear() + '/' + (date.getMonth() + 1) + '/' + date.getDate() + '/' + currentRegion;
                 }
 
-                const response = await fetch(url);
+                const response = await fetch(url, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'Cache-Control': 'no-cache'
+                    }
+                });
                 if (!response.ok) {
-                    throw new Error("Er du i fremtiden?");
+                    throw new Error("Er du i fremtiden? Neste dags priser blir tilgjengelige rundt klokken 13.");
                 }
 
                 const priceData = await response.json();
@@ -715,11 +725,14 @@
             loadData();
         });
 
+        // Debounced resize handler for better performance
+        let resizeTimeout;
         window.addEventListener('resize', function() {
             if (chartData) {
-                setTimeout(() => graphPrice(chartData, currentDate), 100);
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => graphPrice(chartData, currentDate), 150);
             }
         });
     </script>
 </body>
-</html> 
+</html>
