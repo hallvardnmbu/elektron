@@ -527,7 +527,8 @@ const elektronApp = new Elysia()
       const data = await fetchPrices(now.getFullYear(), now.getMonth() + 1, now.getDate(), 'NO2');
       
       const chart = data.map(item => {
-        const hour = new Date(item.time_start).getHours();
+        // Extract hour from UTC time string without timezone conversion
+        const hour = parseInt(item.time_start.split('T')[1].split(':')[0]);
         return {
           hour,
           price: item.NOK_per_kWh * 100.0,
@@ -576,7 +577,8 @@ const elektronApp = new Elysia()
       const data = await fetchPrices(yearNum, monthNum, dayNum, region);
       
       const chart = data.map(item => {
-        const hour = new Date(item.time_start).getHours();
+        // Extract hour from UTC time string without timezone conversion
+        const hour = parseInt(item.time_start.split('T')[1].split(':')[0]);
         return {
           hour,
           price: item.NOK_per_kWh * 100.0,
