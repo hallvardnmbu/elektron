@@ -196,9 +196,11 @@ function renderPage(data) {
                 ctx.beginPath();
                 // Draw horizontal line for current step
                 ctx.moveTo(x1, y1);
-                ctx.lineTo(x2, y1);
+                const lineWidth = ctx.lineWidth; // Typically 2
+                const offset = lineWidth / 4;
+                ctx.lineTo(x2 + offset, y1);
                 // Draw vertical line to next step level
-                ctx.lineTo(x2, y2);
+                ctx.lineTo(x2 + offset, y2);
                 ctx.strokeStyle = lineColor;
                 ctx.lineWidth = 2;
                 ctx.stroke();
