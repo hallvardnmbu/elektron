@@ -133,9 +133,41 @@ function renderPage(data) {
 
             const maxPrice = Math.max(...prices);
             const minPrice = Math.min(...prices);
-            const priceRange = maxPrice - minPrice;
-            const paddedMax = maxPrice + (priceRange * 0.1);
-            const paddedMin = minPrice - (priceRange * 0.1);
+
+            let visualMin = minPrice;
+            let visualMax = maxPrice;
+
+            if (thresholdStates.zero) {
+                visualMin = Math.min(visualMin, 0);
+                visualMax = Math.max(visualMax, 0);
+            }
+
+            if (thresholdStates.fifty) {
+                visualMin = Math.min(visualMin, 50);
+                visualMax = Math.max(visualMax, 50);
+            }
+
+            if (thresholdStates.seventyFive) {
+                visualMin = Math.min(visualMin, 75);
+                visualMax = Math.max(visualMax, 75);
+            }
+
+            let priceRangeAdjusted = visualMax - visualMin;
+            let paddedMin, paddedMax;
+
+            if (priceRangeAdjusted === 0) {
+                if (visualMin === 0 && visualMax === 0) {
+                    paddedMin = -1;
+                    paddedMax = 1;
+                } else {
+                    const padding = Math.max(Math.abs(visualMin * 0.1), 1);
+                    paddedMin = visualMin - padding;
+                    paddedMax = visualMax + padding;
+                }
+            } else {
+                paddedMin = visualMin - (priceRangeAdjusted * 0.1);
+                paddedMax = visualMax + (priceRangeAdjusted * 0.1);
+            }
 
             ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
             ctx.font = '12px JetBrainsMono, "JetBrains Mono", monospace';
