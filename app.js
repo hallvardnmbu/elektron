@@ -1,21 +1,22 @@
-import { Elysia } from 'elysia';
-import { staticPlugin } from '@elysiajs/static';
-import { html } from '@elysiajs/html';
-import { dirname, join } from 'path';
+import { Elysia } from "elysia";
+import { staticPlugin } from "@elysiajs/static";
+import { html } from "@elysiajs/html";
+import { dirname, join } from "path";
 
 let __dirname = dirname(new URL(import.meta.url).pathname);
-__dirname = __dirname.startsWith('/') && __dirname.includes(':') 
-  ? __dirname.replace(/^\/([A-Z]):/, '$1:\\').replace(/\//g, '\\')
-  : __dirname;
+__dirname =
+  __dirname.startsWith("/") && __dirname.includes(":")
+    ? __dirname.replace(/^\/([A-Z]):/, "$1:\\").replace(/\//g, "\\")
+    : __dirname;
 
 // Fetch electricity prices
 async function fetchPrices(year, month, day, region) {
-    const url = `https://www.hvakosterstrommen.no/api/v1/prices/${year}/${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}_${region}.json`;
-    const response = await fetch(url);
-    if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return response.json();
+  const url = `https://www.hvakosterstrommen.no/api/v1/prices/${year}/${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}_${region}.json`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
 }
 
 // Helper function to render the page template
@@ -44,13 +45,13 @@ function renderPage(data) {
             </select>
         </span>
     </div>
-    
+
     <div id="dateNavigation" style="display: none;">
         <button class="nav-button" id="prevButton">◀ Forrige</button>
         <div id="currentDate"></div>
         <button class="nav-button" id="nextButton">Neste ▶</button>
     </div>
-    
+
     <div id="thresholdControls" style="display: none;">
         <label class="threshold-checkbox threshold-zero">
             <input type="checkbox" id="threshold0" />
@@ -65,7 +66,7 @@ function renderPage(data) {
             <span>75 øre</span>
         </label>
     </div>
-    
+
     <div class="loading" id="loading">Laster laster laster...</div>
 
     <div id="graphContainer" style="display: none;">
@@ -111,7 +112,7 @@ function renderPage(data) {
                 ctx.fillStyle = '#1D1C1A';
                 ctx.textAlign = 'center';
                 ctx.fillText('Hmm. Ingen data.', canvas.width / dpr / 2, canvas.height / dpr / 2);
-                
+
                 // Remove any existing hover functionality for no data case
                 canvas.onmousemove = null;
                 canvas.onmouseleave = null;
@@ -180,7 +181,7 @@ function renderPage(data) {
             for (let i = 0; i <= yAxisTicks; i++) {
                 const value = paddedMin + (paddedMax - paddedMin) * i / yAxisTicks;
                 const y = margin.top + graphHeight - (graphHeight * i / yAxisTicks);
-                
+
                 // Y-axis labels
                 ctx.fillText(value.toFixed(1), margin.left - 10, y);
             }
@@ -189,14 +190,14 @@ function renderPage(data) {
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
             const xTickDenominator = stepData.length - 1 > 0 ? stepData.length - 1 : 1;
-            
+
             // Calculate if there's enough space for all hour labels
             ctx.font = '12px JetBrainsMono, "JetBrains Mono", monospace';
             const sampleText = '00';
             const labelWidth = ctx.measureText(sampleText).width;
             const minLabelSpacing = labelWidth + 10; // Add some padding
             const availableSpacing = graphWidth / (stepData.length - 1);
-            
+
             // Determine label step based on actual space availability
             let labelStep = 1;
             if (availableSpacing < minLabelSpacing) {
@@ -206,10 +207,10 @@ function renderPage(data) {
                     labelStep = 2; // Show every 2nd hour when somewhat cramped
                 }
             }
-            
+
             for (let i = 0; i < stepData.length; i++) {
                 const x = margin.left + (graphWidth / xTickDenominator) * i;
-                
+
                 // X-axis labels - only show at specified intervals
                 if (i % labelStep === 0 || i === stepData.length - 1) {
                     ctx.fillText(hours[i].toString().padStart(2, '0'), x, margin.top + graphHeight + 10);
@@ -222,9 +223,9 @@ function renderPage(data) {
                 const x2 = margin.left + (graphWidth / xTickDenominator) * (i + 1);
                 const y1 = margin.top + graphHeight - ((stepData[i].price - paddedMin) / (paddedMax - paddedMin)) * graphHeight;
                 const y2 = margin.top + graphHeight - ((stepData[i + 1].price - paddedMin) / (paddedMax - paddedMin)) * graphHeight;
-                
+
                 const lineColor = '#1D1C1A';
-                
+
                 ctx.beginPath();
                 // Draw horizontal line for current step
                 ctx.moveTo(x1, y1);
@@ -286,21 +287,21 @@ function renderPage(data) {
                 const textMetrics = hoverCtx.measureText(text);
                 let textX = xStep + 10;
                 let textY = yStep - 15;
-                
+
                 if (textX + textMetrics.width > canvas.width / dpr - 10) {
                     textX = xStep - textMetrics.width - 10;
                 }
                 if (textY < 20) {
                     textY = yStep + 25;
                 }
-                
+
                 // Tooltip background
                 hoverCtx.fillStyle = '#ffffff';
                 hoverCtx.fillRect(textX - 5, textY - 15, textMetrics.width + 10, 20);
                 hoverCtx.strokeStyle = '#1D1C1A';
                 hoverCtx.lineWidth = 2;
                 hoverCtx.strokeRect(textX - 5, textY - 15, textMetrics.width + 10, 20);
-                
+
                 // Tooltip text
                 hoverCtx.fillStyle = '#1D1C1A';
                 hoverCtx.fillText(text, textX, textY);
@@ -312,7 +313,7 @@ function renderPage(data) {
                 hoverCtx.strokeStyle = '#1D1C1A';
                 hoverCtx.lineWidth = 2;
                 hoverCtx.stroke();
-                
+
                 // Point marker
                 hoverCtx.beginPath();
                 hoverCtx.arc(xStep, yStep, 4, 0, 2 * Math.PI);
@@ -335,14 +336,14 @@ function renderPage(data) {
             thresholds.forEach(threshold => {
                 if (threshold.enabled && threshold.value >= paddedMin && threshold.value <= paddedMax) {
                     const y = margin.top + graphHeight - ((threshold.value - paddedMin) / (paddedMax - paddedMin)) * graphHeight;
-                    
+
                     ctx.beginPath();
                     ctx.moveTo(margin.left, y);
                     ctx.lineTo(margin.left + graphWidth, y);
                     ctx.strokeStyle = threshold.color;
                     ctx.lineWidth = 2;
                     ctx.stroke();
-                    
+
                     // Add threshold label
                     ctx.font = '11px JetBrainsMono, "JetBrains Mono", monospace';
                     ctx.fillStyle = threshold.color;
@@ -357,7 +358,7 @@ function renderPage(data) {
             thresholdStates.zero = document.getElementById('threshold0').checked;
             thresholdStates.fifty = document.getElementById('threshold50').checked;
             thresholdStates.seventyFive = document.getElementById('threshold75').checked;
-            
+
             if (chartData) {
                 graphPrice(chartData, currentDate);
             }
@@ -435,7 +436,7 @@ function renderPage(data) {
             document.getElementById('headerTitle').textContent = headerTitle;
 
             const statisticsElement = document.getElementById('statistics');
-            statisticsElement.innerHTML = 
+            statisticsElement.innerHTML =
                 '<span>Min.: ' + minPrice.toFixed(1) + '</span>' +
                 '<span>Gjn.: ' + avgPrice.toFixed(1) + '</span>' +
                 '<span>Maks: ' + maxPrice.toFixed(1) + '</span>';
@@ -448,18 +449,18 @@ function renderPage(data) {
         function updateNavigationButtons() {
             const prevButton = document.getElementById('prevButton');
             const nextButton = document.getElementById('nextButton');
-            
+
             const today = new Date();
             const tomorrow = new Date(today);
             tomorrow.setDate(tomorrow.getDate() + 1);
-            
+
             const minDate = new Date('2020-01-01');
-            
+
             // Enable/disable previous button
             const prevDate = new Date(currentDate);
             prevDate.setDate(prevDate.getDate() - 1);
             prevButton.disabled = prevDate < minDate;
-            
+
             // Enable/disable next button (can go to tomorrow but not beyond)
             const nextDate = new Date(currentDate);
             nextDate.setDate(nextDate.getDate() + 1);
@@ -469,12 +470,12 @@ function renderPage(data) {
         function navigateDate(direction) {
             const newDate = new Date(currentDate);
             newDate.setDate(newDate.getDate() + direction);
-            
+
             const today = new Date();
             const tomorrow = new Date(today);
             tomorrow.setDate(tomorrow.getDate() + 1);
             const minDate = new Date('2020-01-01');
-            
+
             if (newDate >= minDate && newDate <= tomorrow) {
                 currentDate = newDate;
                 loadData(currentDate);
@@ -485,20 +486,20 @@ function renderPage(data) {
             // Add event listeners for navigation buttons
             document.getElementById('prevButton').addEventListener('click', () => navigateDate(-1));
             document.getElementById('nextButton').addEventListener('click', () => navigateDate(1));
-            
+
             // Add event listeners for threshold checkboxes
             document.getElementById('threshold0').addEventListener('change', updateThresholdStates);
             document.getElementById('threshold50').addEventListener('change', updateThresholdStates);
             document.getElementById('threshold75').addEventListener('change', updateThresholdStates);
-            
+
             // Add event listener for region dropdown
             document.getElementById('regionDropdown').addEventListener('change', updateRegion);
-            
+
             // Set default checkbox states
             document.getElementById('threshold0').checked = true;
             document.getElementById('threshold50').checked = true;
             document.getElementById('threshold75').checked = true;
-            
+
             loadData();
         });
 
@@ -513,56 +514,67 @@ function renderPage(data) {
     </script>
 </body>
 </html>
-`
+`;
 }
 
-const elektronApp = new Elysia()
-  .use(staticPlugin({
-    assets: join(__dirname, "public"),
-    prefix: "/"
-  }))
+const elektron = new Elysia()
+  .use(
+    staticPlugin({
+      assets: join(__dirname, "public"),
+      prefix: "/",
+    }),
+  )
   .use(html())
-  .get('/', () => renderPage({}))
-  .get('/fonts/:filename', async ({ params }) => {
+  .get("/", () => renderPage({}))
+  .get("/fonts/:filename", async ({ params }) => {
     try {
       const { filename } = params;
-      
+
       // Security check - prevent directory traversal
-      if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
-        return new Response('Invalid filename', { status: 400 });
+      if (
+        filename.includes("..") ||
+        filename.includes("/") ||
+        filename.includes("\\")
+      ) {
+        return new Response("Invalid filename", { status: 400 });
       }
-      
-      const fontPath = join(__dirname, 'font', filename);
+
+      const fontPath = join(__dirname, "font", filename);
       const fontFile = Bun.file(fontPath);
-      
+
       // Check if file exists
-      if (!await fontFile.exists()) {
-        return new Response('Font not found', { status: 404 });
+      if (!(await fontFile.exists())) {
+        return new Response("Font not found", { status: 404 });
       }
-      
-      let mimeType = 'application/octet-stream';
-      if (filename.endsWith('.woff2')) mimeType = 'font/woff2';
-      else if (filename.endsWith('.woff')) mimeType = 'font/woff';
-      else if (filename.endsWith('.ttf')) mimeType = 'font/ttf';
-      
+
+      let mimeType = "application/octet-stream";
+      if (filename.endsWith(".woff2")) mimeType = "font/woff2";
+      else if (filename.endsWith(".woff")) mimeType = "font/woff";
+      else if (filename.endsWith(".ttf")) mimeType = "font/ttf";
+
       return new Response(fontFile, {
         headers: {
-          'content-type': mimeType,
-          'cache-control': 'public, max-age=31536000' // Cache for 1 year
-        }
+          "content-type": mimeType,
+          "cache-control": "public, max-age=31536000", // Cache for 1 year
+        },
       });
     } catch (error) {
-      return new Response('Font not found', { status: 404 });
+      return new Response("Font not found", { status: 404 });
     }
   })
-  .get('/prices', async () => {
+  .get("/prices", async () => {
     try {
       const now = new Date();
-      const data = await fetchPrices(now.getFullYear(), now.getMonth() + 1, now.getDate(), 'NO2');
-      
-      const chart = data.map(item => {
+      const data = await fetchPrices(
+        now.getFullYear(),
+        now.getMonth() + 1,
+        now.getDate(),
+        "NO2",
+      );
+
+      const chart = data.map((item) => {
         // Extract hour from UTC time string without timezone conversion
-        const hour = parseInt(item.time_start.split('T')[1].split(':')[0]);
+        const hour = parseInt(item.time_start.split("T")[1].split(":")[0]);
         return {
           hour,
           price: item.NOK_per_kWh * 100.0,
@@ -571,48 +583,68 @@ const elektronApp = new Elysia()
           price_eur: item.EUR_per_kWh,
         };
       });
-      
+
       return Response.json(chart);
     } catch (error) {
-      return Response.json({ message: "Finner ikke noe data. :-(" }, { status: 500 });
+      return Response.json(
+        { message: "Finner ikke noe data. :-(" },
+        { status: 500 },
+      );
     }
   })
-  .get('/prices/:year/:month/:day/:region', async ({ params }) => {
+  .get("/prices/:year/:month/:day/:region", async ({ params }) => {
     try {
       const { year, month, day, region } = params;
-      
+
       // Validation
       const yearNum = parseInt(year);
       const monthNum = parseInt(month);
       const dayNum = parseInt(day);
-      
+
       // Check for NaN values (invalid numeric inputs)
       if (isNaN(yearNum) || isNaN(monthNum) || isNaN(dayNum)) {
-        return Response.json({ message: 'Year, month, and day must be valid numbers' }, { status: 400 });
+        return Response.json(
+          { message: "Year, month, and day must be valid numbers" },
+          { status: 400 },
+        );
       }
-      
+
       if (yearNum < 2020 || yearNum > 2030) {
-        return Response.json({ message: 'Year must be between 2020 and 2030' }, { status: 400 });
+        return Response.json(
+          { message: "Year must be between 2020 and 2030" },
+          { status: 400 },
+        );
       }
       if (monthNum < 1 || monthNum > 12) {
-        return Response.json({ message: 'Month must be between 1 and 12' }, { status: 400 });
+        return Response.json(
+          { message: "Month must be between 1 and 12" },
+          { status: 400 },
+        );
       }
-      
+
       // Validate day for the given month and year
       const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
       if (dayNum < 1 || dayNum > daysInMonth) {
-        return Response.json({ message: `Day must be between 1 and ${daysInMonth} for month ${monthNum}` }, { status: 400 });
+        return Response.json(
+          {
+            message: `Day must be between 1 and ${daysInMonth} for month ${monthNum}`,
+          },
+          { status: 400 },
+        );
       }
-      
-      if (!['NO1', 'NO2', 'NO3', 'NO4', 'NO5'].includes(region)) {
-        return Response.json({ message: 'Region must be NO1-NO5' }, { status: 400 });
+
+      if (!["NO1", "NO2", "NO3", "NO4", "NO5"].includes(region)) {
+        return Response.json(
+          { message: "Region must be NO1-NO5" },
+          { status: 400 },
+        );
       }
-      
+
       const data = await fetchPrices(yearNum, monthNum, dayNum, region);
-      
-      const chart = data.map(item => {
+
+      const chart = data.map((item) => {
         // Extract hour from UTC time string without timezone conversion
-        const hour = parseInt(item.time_start.split('T')[1].split(':')[0]);
+        const hour = parseInt(item.time_start.split("T")[1].split(":")[0]);
         return {
           hour,
           price: item.NOK_per_kWh * 100.0,
@@ -621,16 +653,16 @@ const elektronApp = new Elysia()
           price_eur: item.EUR_per_kWh,
         };
       });
-      
+
       return Response.json(chart);
     } catch (error) {
       return Response.json({ message: "Noe gikk galt." }, { status: 500 });
     }
   });
 
-export default elektronApp;
+export default elektron;
 
 if (import.meta.main) {
-    elektronApp.listen(3000);
-    console.log(`http://${elektronApp.server?.hostname}:${elektronApp.server?.port}`);
+  elektron.listen(3000);
+  console.log(`http://${elektron.server?.hostname}:${elektron.server?.port}`);
 }
